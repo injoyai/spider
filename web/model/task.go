@@ -9,7 +9,7 @@ type Task struct {
 
 	LastDate int64 `json:"lastDate" xorm:"-"` //上次执行时间
 	NextDate int64 `json:"nextDate" xorm:"-"` //下次执行时间
-	Valid    bool  `json:"valid" xorm:"-"`    //是否有效
+	Enable   bool  `json:"enable" xorm:"-"`   //是否有效(启用)
 }
 
 func (this *Task) Response() *Task {
