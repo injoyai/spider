@@ -25,7 +25,6 @@ type TaskInfo struct {
 
 type TaskCreateReq struct {
 	*TaskInfo
-	Spec string `json:"spec"` //表达式
 }
 
 func (this *TaskCreateReq) New() (*Task, string, error) {
