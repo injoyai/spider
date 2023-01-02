@@ -2,6 +2,7 @@ package task
 
 import (
 	"fmt"
+	"github.com/injoyai/conv"
 	"github.com/robfig/cron/v3"
 	"strconv"
 	"strings"
@@ -9,37 +10,44 @@ import (
 	"time"
 )
 
+func CheckSpec(spec string) error {
+	_, err := cron.ParseStandard(spec)
+	return err
+}
+
 // New 新建计时器(任务调度),最小周期秒
 func New() *Cron {
 	return &Cron{
-		Cron: cron.New(cron.WithSeconds()),
-		m:    make(map[string]*Task),
+		c: cron.New(cron.WithSeconds()),
+		m: make(map[string]*Task),
 	}
 }
 
 // Cron 定时器(任务调度),任务起一个协程
 type Cron struct {
-	*cron.Cron
+	c  *cron.Cron
 	m  map[string]*Task
 	mu sync.RWMutex
 }
 
-// GetTasks 读取全部任务
-func (this *Cron) GetTasks() []*Task {
-	m := make(map[cron.EntryID]Task)
+// GetTaskAll 读取全部任务
+func (this *Cron) GetTaskAll() []*Task {
+	m := make(map[cron.EntryID]*Task)
 	this.mu.RLock()
 	for _, v := range this.m {
-		m[v.ID] = *v
+		m[v.ID] = v
 	}
 	this.mu.RUnlock()
 
 	taskList := []*Task(nil)
-	for _, v := range this.Cron.Entries() {
-		taskList = append(taskList, &Task{
-			Key:   m[v.ID].Key,
-			Spec:  m[v.ID].Spec,
-			Entry: v,
-		})
+	for _, v := range this.c.Entries() {
+		task, ok := m[v.ID]
+		if !ok {
+			//删除不在档的任务
+			this.c.Remove(v.ID)
+			continue
+		}
+		taskList = append(taskList, task.SetEntry(v))
 	}
 	return taskList
 }
@@ -52,40 +60,34 @@ func (this *Cron) GetTask(key string) *Task {
 	if !ok {
 		return nil
 	}
-	en := this.Cron.Entry(task.ID)
+	en := this.c.Entry(task.ID)
 	if en.ID == 0 {
 		this.mu.Lock()
 		delete(this.m, key)
 		this.mu.Unlock()
 		return nil
 	}
-	return &Task{Key: key, Entry: en}
+	return task.SetEntry(en)
 }
 
 // SetTask 设置任务
-func (this *Cron) SetTask(key, spec string, task func()) error {
-	return this.SetJob(key, spec, cron.FuncJob(task))
-}
-
-// SetJob 设置任务
-func (this *Cron) SetJob(key, spec string, job cron.Job) error {
+func (this *Cron) SetTask(key, spec string, handler func(), data ...interface{}) error {
 	this.mu.RLock()
 	task, ok := this.m[key]
 	this.mu.RUnlock()
 	if ok {
 		//存在相同任务,则移除
-		this.Cron.Remove(task.ID)
+		this.c.Remove(task.ID)
+		this.mu.Lock()
+		delete(this.m, key)
+		this.mu.Unlock()
 	}
-	id, err := this.Cron.AddJob(spec, job)
+	id, err := this.c.AddFunc(spec, handler)
 	if err != nil {
 		return err
 	}
 	this.mu.Lock()
-	this.m[key] = &Task{
-		Key:   key,
-		Spec:  spec,
-		Entry: cron.Entry{ID: id},
-	}
+	this.m[key] = newTask(key, spec, cron.Entry{ID: id}, data...)
 	this.mu.Unlock()
 	return nil
 }
@@ -96,7 +98,7 @@ func (this *Cron) DelTask(key string) {
 	task, ok := this.m[key]
 	this.mu.RUnlock()
 	if ok {
-		this.Cron.Remove(task.ID)
+		this.c.Remove(task.ID)
 		this.mu.Lock()
 		delete(this.m, key)
 		this.mu.Unlock()
@@ -105,9 +107,24 @@ func (this *Cron) DelTask(key string) {
 
 // Task 任务
 type Task struct {
-	Key        string //任务唯一标识
-	Spec       string //定时规则
-	cron.Entry        //任务
+	Key        string      //任务唯一标识
+	Spec       string      //定时规则
+	Data       interface{} //自定义数据
+	cron.Entry             //任务
+}
+
+func newTask(key, spec string, e cron.Entry, v ...interface{}) *Task {
+	return &Task{
+		Key:   key,
+		Spec:  spec,
+		Data:  conv.GetDefaultInterface(nil, v...),
+		Entry: e,
+	}
+}
+
+func (this *Task) SetEntry(e cron.Entry) *Task {
+	this.Entry = e
+	return this
 }
 
 func (this *Task) String() string {
