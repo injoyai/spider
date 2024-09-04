@@ -1,8 +1,5 @@
-module github.com/injoyai/task
+module github.com/injoyai/spider
 
-go 1.15
+go 1.20
 
-require (
-	github.com/injoyai/conv v1.0.4
-	github.com/robfig/cron/v3 v3.0.1
-)
+require golang.org/x/net v0.28.0
