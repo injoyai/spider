@@ -1,7 +1,10 @@
 package selenium
 
 import (
+	"github.com/injoyai/logs"
 	"github.com/injoyai/spider/app"
+	"github.com/injoyai/spider/tool"
+	"net/http"
 	"time"
 )
 
@@ -13,12 +16,15 @@ var _ = app.Rule{
 	Depth:         0,
 	Header:        nil,
 	DisableCookie: false,
-	Cookie:        nil,
-	Timeout:       0,
-	Proxy:         nil,
-	Log:           nil,
-	Root:          nil,
-	Actions:       nil,
-	OnOutput:      nil,
-	Runner:        nil,
+	Cookie: func() []*http.Cookie {
+		cookies, err := tool.LoadingCookies("./data/cookie/selenium.json")
+		logs.PrintErr(err)
+		return cookies
+	}(),
+	Timeout:  0,
+	Proxy:    nil,
+	Log:      nil,
+	Root:     nil,
+	Actions:  nil,
+	OnOutput: nil,
 }.Register()

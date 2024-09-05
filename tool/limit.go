@@ -1,4 +1,4 @@
-package lib
+package tool
 
 type Limit struct {
 	C    chan struct{}

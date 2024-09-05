@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"github.com/injoyai/base/maps"
 	"github.com/injoyai/base/safe"
-	"github.com/injoyai/spider/lib"
+	"github.com/injoyai/spider/tool"
 	"golang.org/x/net/proxy"
 	"log"
 	"math/rand"
@@ -34,7 +34,7 @@ type Rule struct {
 	*safe.Runner                 //内部运行机制
 	client       *http.Client    //http客户端
 	rand         *rand.Rand      //用于生成随机数
-	limit        *lib.Limit      //限制协程数量
+	limit        *tool.Limit     //限制协程数量
 	queue        chan *Task      //任务队列
 	ctx          context.Context //
 }
@@ -52,7 +52,7 @@ func (this Rule) Register() *Rule {
 	r.Runner.SetFunc(r.run)
 	r.initClient()
 	r.rand = rand.New(rand.NewSource(time.Now().UnixNano()))
-	r.limit = lib.NewLimit(r.Limit)
+	r.limit = tool.NewLimit(r.Limit)
 	r.queue = make(chan *Task, 1000)
 	r.ctx = context.Background()
 	App.Register(r)
