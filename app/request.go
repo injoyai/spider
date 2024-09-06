@@ -33,12 +33,12 @@ func (this *Request) GetBody() io.Reader {
 
 type Task struct {
 	*Context
-	*Request
+	Request
 }
 
 func (this *Task) Do() {
 	this.rule.limit.Add()
-	this.rule.Log.Printf("[信息] 开始请求[%s]...\n", this.Url)
+	this.rule.Log.Printf("[信息] 开始请求[%s]\n", this.Url)
 	go func() {
 		defer this.rule.limit.Done()
 		req, resp, err := this.do()
@@ -63,13 +63,11 @@ func (this *Task) do() (*http.Request, *http.Response, error) {
 	for k, v := range this.rule.Header {
 		req.Header.Add(k, strings.Join(v, ","))
 	}
-	if !this.rule.DisableCookie {
-		for _, v := range this.rule.Cookie {
-			req.AddCookie(v)
-		}
-		for _, v := range this.Request.Cookie {
-			req.AddCookie(v)
-		}
+	for _, v := range this.Request.Cookie {
+		req.AddCookie(v)
+	}
+	if this.rule.DisableCookie {
+		req.Header.Del("Cookie")
 	}
 	resp, err := this.rule.client.Do(req)
 	return req, resp, err

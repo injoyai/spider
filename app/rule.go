@@ -2,16 +2,17 @@ package app
 
 import (
 	"context"
-	"crypto/tls"
 	"github.com/injoyai/base/maps"
 	"github.com/injoyai/base/safe"
 	"github.com/injoyai/spider/tool"
-	"golang.org/x/net/proxy"
 	"log"
 	"math/rand"
 	"net/http"
-	"net/url"
 	"time"
+)
+
+var (
+	DefaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36"
 )
 
 type Rule struct {
@@ -21,18 +22,18 @@ type Rule struct {
 	Limit         int               //最大并发数
 	Depth         int               //爬取深度,小于等于0表示无限制
 	Header        http.Header       //请求头
-	DisableCookie bool              //禁用cookie
-	Cookie        []*http.Cookie    //自定义cookie
+	UserAgents    []string          //如果填写则使用取其中一个数据,否则使用默认值
+	DisableCookie bool              //全局禁用cookie
 	Timeout       time.Duration     //HTTP请求超时时间,默认不超时
-	Proxy         []string          //代理地址
+	Proxy         string            //代理地址,空为不代理
 	Log           *log.Logger       //日志
-	Root          *Request          //根请求
+	Root          Request           //根请求
 	Actions       map[string]Action //不同的动作(解析/再次请求)
 	OnOutput      func(any)         //输出
 
 	//内部字段
 	*safe.Runner                 //内部运行机制
-	client       *http.Client    //http客户端
+	client       *Client         //http客户端
 	rand         *rand.Rand      //用于生成随机数
 	limit        *tool.Limit     //限制协程数量
 	queue        chan *Task      //任务队列
@@ -50,13 +51,20 @@ func (this Rule) Register() *Rule {
 
 	r.Runner = safe.NewRunner(nil)
 	r.Runner.SetFunc(r.run)
-	r.initClient()
+	r.client = newClient(r.Timeout, r.Proxy)
 	r.rand = rand.New(rand.NewSource(time.Now().UnixNano()))
 	r.limit = tool.NewLimit(r.Limit)
 	r.queue = make(chan *Task, 1000)
 	r.ctx = context.Background()
 	App.Register(r)
 	return r
+}
+
+func (this *Rule) getUserAgent() string {
+	if len(this.UserAgents) > 0 {
+		return this.UserAgents[this.rand.Intn(len(this.UserAgents))]
+	}
+	return DefaultUserAgent
 }
 
 func (this *Rule) pause() {
@@ -85,46 +93,13 @@ func (this *Rule) doAction(ctx *Context, by string, req *http.Request, resp *htt
 	})
 }
 
-func (this *Rule) initClient() {
-	transport := &http.Transport{
-		//连接结束后会直接关闭,不复用
-		DisableKeepAlives: true,
-		TLSClientConfig: &tls.Config{
-			//设置可以访问HTTPS
-			InsecureSkipVerify: true,
-		},
-	}
-	for _, v := range this.Proxy {
-		p, err := url.Parse(v)
-		if err == nil {
-			switch p.Scheme {
-			case "http", "https":
-				transport.Proxy = http.ProxyURL(p)
-			case "socks5", "socks5h":
-				dialer, err := proxy.FromURL(p, proxy.Direct)
-				if err != nil {
-					continue
-				}
-				transport.Dial = dialer.Dial
-			default:
-				transport.Proxy = http.ProxyURL(p)
-			}
-			break
-		}
-	}
-	this.client = &http.Client{
-		Transport: transport,
-		Timeout:   this.Timeout,
-	}
-}
-
 func (this *Rule) run(ctx context.Context) error {
-	c := &Context{
+
+	(&Context{
 		rule:    this,
 		Context: this.ctx,
 		Safe:    maps.NewSafe(),
-	}
-	c.Do(this.Root)
+	}).Do(this.Root)
 
 	for {
 		//随机暂停,模拟人工操作

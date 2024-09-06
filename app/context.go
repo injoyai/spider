@@ -28,7 +28,8 @@ type Context struct {
 	*http.Response
 	*maps.Safe
 	context.Context
-	cookies []*http.Cookie
+	cookies   []*http.Cookie
+	UserAgent string
 }
 
 /*
@@ -52,9 +53,19 @@ func (this *Context) Document() (*goquery.Document, error) {
 }
 
 // Do 发起新的请求
-func (this *Context) Do(req *Request) {
-	if req == nil {
-		return
+func (this *Context) Do(req Request) {
+	if len(this.UserAgent) == 0 {
+		if this.Request != nil && len(this.Request.Header.Get("User-Agent")) > 0 {
+			this.UserAgent = this.Request.Header.Get("User-Agent")
+		} else {
+			this.UserAgent = this.rule.getUserAgent()
+		}
+	}
+	if req.Header == nil {
+		req.Header = http.Header{}
+	}
+	if req.Header.Get("User-Agent") == "" {
+		req.Header.Set("User-Agent", this.UserAgent)
 	}
 	select {
 	case this.rule.queue <- &Task{
@@ -63,7 +74,6 @@ func (this *Context) Do(req *Request) {
 	}:
 	default:
 	}
-
 }
 
 // Next 下一步处理响应数据
@@ -72,6 +82,11 @@ func (this *Context) Next(by string) {
 	if action != nil {
 		action(this)
 	}
+}
+
+// Exit 退出爬取
+func (this *Context) Exit() {
+	this.rule.Stop()
 }
 
 // Output 输出结果
@@ -88,22 +103,36 @@ func (this *Context) Cookies() []*http.Cookie {
 	return this.cookies
 }
 
-// Selenium 调起浏览器进行操作,例扫码登录
-func (this *Context) Selenium(driverPath, browserPath string, option ...selenium.Option) error {
-	wb, err := selenium.Chrome(driverPath, browserPath, option...)
+// Chrome 调起浏览器进行操作,例扫码登录
+func (this *Context) Chrome(driverPath, browserPath string, option ...selenium.Option) (*selenium.WebDriver, error) {
+	//selenium.Debug(false)
+	wb, err := selenium.Chrome(driverPath, browserPath, func(e *selenium.Entity) error {
+		if len(this.rule.client.Proxy) > 0 {
+			e.SetProxy(this.rule.client.Proxy)
+			e.SetUserAgent(this.UserAgent)
+		}
+		for _, v := range option {
+			if err := v(e); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if err := wb.Get(this.Request.URL.String()); err != nil {
-		return err
-	}
+	err = wb.Get(this.Request.URL.String())
+	return wb, err
+}
+
+func (this *Context) GetCookiesFromChrome(wb *selenium.WebDriver) ([]*http.Cookie, error) {
 	cookies, err := wb.GetCookies()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	this.cookies = make([]*http.Cookie, len(cookies))
+	httpCookies := make([]*http.Cookie, len(cookies))
 	for i := range cookies {
-		this.cookies[i] = &http.Cookie{
+		httpCookies[i] = &http.Cookie{
 			Name:     cookies[i].Name,
 			Value:    cookies[i].Value,
 			Path:     cookies[i].Path,
@@ -114,7 +143,12 @@ func (this *Context) Selenium(driverPath, browserPath string, option ...selenium
 			SameSite: http.SameSite(conv.Int(cookies[i].SameSite)),
 		}
 	}
-	return nil
+	return httpCookies, nil
+}
+
+func (this *Context) GetUserAgentFromChrome(wb *selenium.WebDriver) (string, error) {
+	userAgent, err := wb.ExecuteScript("return window.navigator.userAgent", nil)
+	return conv.String(userAgent), err
 }
 
 // SaveCookies 保存cookie到文件
