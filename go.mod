@@ -5,7 +5,9 @@ go 1.20
 require (
 	github.com/PuerkitoBio/goquery v1.9.2
 	github.com/injoyai/base v1.0.18
-	github.com/injoyai/logs v1.0.8
+	github.com/injoyai/conv v1.1.5
+	github.com/injoyai/goutil v0.0.0-20240127144620-afd71b10843c
+	github.com/injoyai/logs v1.0.9
 	github.com/injoyai/selenium v0.0.0-20240221082317-29c81735b849
 	golang.org/x/net v0.28.0
 )
@@ -21,8 +23,6 @@ require (
 	github.com/goburrow/serial v0.1.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
-	github.com/injoyai/conv v1.1.5 // indirect
-	github.com/injoyai/goutil v0.0.0-20240127144620-afd71b10843c // indirect
 	github.com/injoyai/io v0.1.6 // indirect
 	github.com/jmespath/go-jmespath v0.3.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
