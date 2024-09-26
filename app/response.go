@@ -6,22 +6,24 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/injoyai/base/maps"
 	"github.com/injoyai/conv"
+	"github.com/injoyai/conv/codec"
 	"github.com/injoyai/goutil/oss"
 	"github.com/injoyai/selenium"
+	"io"
 	"net/http"
 	"time"
 )
 
-type Action func(ctx *Context)
+type Action func(ctx *Response)
 
-func (this *Rule) newContext() *Context {
-	return &Context{
+func (this *Rule) newContext() *Response {
+	return &Response{
 		rule: this,
 		Safe: maps.NewSafe(),
 	}
 }
 
-type Context struct {
+type Response struct {
 	rule    *Rule
 	depth   int
 	Request *http.Request
@@ -30,6 +32,35 @@ type Context struct {
 	context.Context
 	cookies   []*http.Cookie
 	UserAgent string
+}
+
+func (this *Response) DoRequest(method string, url string, body io.Reader, op ...func(r *http.Request)) (*Response, error) {
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range op {
+		f(req)
+	}
+	resp, err := this.Client().Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Response{
+		rule:      this.rule,
+		depth:     0,
+		Request:   req,
+		Response:  resp,
+		Safe:      this.Safe,
+		Context:   this.Context,
+		cookies:   this.cookies,
+		UserAgent: this.UserAgent,
+	}, nil
+}
+
+func (this *Response) Client() *Client {
+	return this.rule.client
 }
 
 /*
@@ -48,12 +79,17 @@ https://blog.csdn.net/qq_38334677/article/details/129225231
 		fmt.Println(selection.Text())
 	})
 */
-func (this *Context) Document() (*goquery.Document, error) {
+func (this *Response) Document() (*goquery.Document, error) {
 	return goquery.NewDocumentFromReader(this.Body)
 }
 
+// Map 把body解析成conv.Map
+func (this *Response) Map(codec ...codec.Interface) *conv.Map {
+	return conv.NewMap(this.Body, codec...)
+}
+
 // Do 发起新的请求
-func (this *Context) Do(req Request) {
+func (this *Response) Do(req Request) {
 	if len(this.UserAgent) == 0 {
 		if this.Request != nil && len(this.Request.Header.Get("User-Agent")) > 0 {
 			this.UserAgent = this.Request.Header.Get("User-Agent")
@@ -69,15 +105,15 @@ func (this *Context) Do(req Request) {
 	}
 	select {
 	case this.rule.queue <- &Task{
-		Context: this,
-		Request: req,
+		Response: this,
+		Request:  req,
 	}:
 	default:
 	}
 }
 
 // Next 下一步处理响应数据
-func (this *Context) Next(by string) {
+func (this *Response) Next(by string) {
 	action := this.rule.Actions[by]
 	if action != nil {
 		action(this)
@@ -85,18 +121,18 @@ func (this *Context) Next(by string) {
 }
 
 // Exit 退出爬取
-func (this *Context) Exit() {
+func (this *Response) Exit() {
 	this.rule.Stop()
 }
 
 // Output 输出结果
-func (this *Context) Output(v any) {
+func (this *Response) Output(v any) {
 	if this.rule.OnOutput != nil {
 		this.rule.OnOutput(v)
 	}
 }
 
-func (this *Context) Cookies() []*http.Cookie {
+func (this *Response) Cookies() []*http.Cookie {
 	if this.cookies == nil {
 		this.cookies = this.Response.Cookies()
 	}
@@ -104,7 +140,7 @@ func (this *Context) Cookies() []*http.Cookie {
 }
 
 // Chrome 调起浏览器进行操作,例扫码登录
-func (this *Context) Chrome(driverPath, browserPath string, option ...selenium.Option) (*selenium.WebDriver, error) {
+func (this *Response) Chrome(driverPath, browserPath string, option ...selenium.Option) (*selenium.WebDriver, error) {
 	//selenium.Debug(false)
 	wb, err := selenium.Chrome(driverPath, browserPath, func(e *selenium.Entity) error {
 		if len(this.rule.client.Proxy) > 0 {
@@ -125,7 +161,7 @@ func (this *Context) Chrome(driverPath, browserPath string, option ...selenium.O
 	return wb, err
 }
 
-func (this *Context) GetCookiesFromChrome(wb *selenium.WebDriver) ([]*http.Cookie, error) {
+func (this *Response) GetCookiesFromChrome(wb *selenium.WebDriver) ([]*http.Cookie, error) {
 	cookies, err := wb.GetCookies()
 	if err != nil {
 		return nil, err
@@ -146,18 +182,18 @@ func (this *Context) GetCookiesFromChrome(wb *selenium.WebDriver) ([]*http.Cooki
 	return httpCookies, nil
 }
 
-func (this *Context) GetUserAgentFromChrome(wb *selenium.WebDriver) (string, error) {
+func (this *Response) GetUserAgentFromChrome(wb *selenium.WebDriver) (string, error) {
 	userAgent, err := wb.ExecuteScript("return window.navigator.userAgent", nil)
 	return conv.String(userAgent), err
 }
 
 // SaveCookies 保存cookie到文件
-func (this *Context) SaveCookies(filename string) error {
+func (this *Response) SaveCookies(filename string) error {
 	return oss.New(filename, this.Cookies())
 }
 
 // LoadingCookies 加载本地cookie
-func (this *Context) LoadingCookies(filename string) error {
+func (this *Response) LoadingCookies(filename string) error {
 	cookies := []*http.Cookie(nil)
 	bs, err := oss.ReadBytes(filename)
 	if err != nil {

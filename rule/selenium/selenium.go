@@ -18,7 +18,7 @@ var _ = app.Rule{
 		Url: "https://mojie.app/#/login",
 	},
 	Actions: map[string]app.Action{
-		"login": func(ctx *app.Context) {
+		"login": func(ctx *app.Response) {
 			wb, err := ctx.Chrome("./bin/chrome/chromedriver.exe", "./bin/chrome/chrome.exe")
 			if err != nil {
 				logs.Err(err)
@@ -37,7 +37,7 @@ var _ = app.Rule{
 				Url: "https://mojie.app/#/order",
 			})
 		},
-		"order": func(ctx *app.Context) {
+		"order": func(ctx *app.Response) {
 
 			logs.Debug("order")
 

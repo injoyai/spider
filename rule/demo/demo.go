@@ -15,7 +15,7 @@ var _ = app.Rule{
 		Url: "https://blog.csdn.net/qq_38334677/article/details/129225231",
 	},
 	Actions: map[string]app.Action{
-		"find": func(ctx *app.Context) {
+		"find": func(ctx *app.Response) {
 
 			doc, err := ctx.Document()
 			if err != nil {

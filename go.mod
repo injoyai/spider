@@ -6,11 +6,12 @@ require (
 	github.com/PuerkitoBio/goquery v1.9.2
 	github.com/injoyai/base v1.0.18
 	github.com/injoyai/conv v1.1.5
-	github.com/injoyai/goutil v0.0.0-20240127144620-afd71b10843c
 	github.com/injoyai/logs v1.0.9
 	github.com/injoyai/selenium v0.0.0-20240221082317-29c81735b849
 	golang.org/x/net v0.28.0
 )
+
+require github.com/injoyai/goutil v0.0.0-20240127144620-afd71b10843c
 
 require (
 	github.com/aliyun/alibaba-cloud-sdk-go v1.62.349 // indirect

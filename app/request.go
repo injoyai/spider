@@ -32,7 +32,7 @@ func (this *Request) GetBody() io.Reader {
 }
 
 type Task struct {
-	*Context
+	*Response
 	Request
 }
 
@@ -48,7 +48,7 @@ func (this *Task) Do() {
 		}
 		//todo 这里可能会阻塞,当全部协程在执行时,并吧队列插入满,则会阻塞,
 		//todo 协程停止不掉(等待插入队列),队列插不进去(等待协程释放)
-		this.rule.doAction(this.Context, this.By, req, resp)
+		this.rule.doAction(this.Response, this.By, req, resp)
 	}()
 }
 

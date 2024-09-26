@@ -77,13 +77,13 @@ func (this *Rule) pause() {
 	time.Sleep(t)
 }
 
-func (this *Rule) doAction(ctx *Context, by string, req *http.Request, resp *http.Response) {
+func (this *Rule) doAction(ctx *Response, by string, req *http.Request, resp *http.Response) {
 	action := this.Actions[by]
 	if action == nil {
 		this.Log.Printf("[警告] 动作[%s]不存在\n", by)
 		return
 	}
-	action(&Context{
+	action(&Response{
 		rule:     this,
 		Request:  req,
 		Response: resp,
@@ -95,7 +95,7 @@ func (this *Rule) doAction(ctx *Context, by string, req *http.Request, resp *htt
 
 func (this *Rule) run(ctx context.Context) error {
 
-	(&Context{
+	(&Response{
 		rule:    this,
 		Context: this.ctx,
 		Safe:    maps.NewSafe(),
